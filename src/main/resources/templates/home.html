@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        /* Global Styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        body {
+            display: flex;
+            height: 100vh;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Division Base Styles */
+        .sidebar, .tasks-section, .task-details {
+            position: relative;
+            min-width: 150px; /* Minimum width to prevent collapse */
+        }
+
+        /* Resize Handle (Shared Across Divisions) */
+        .resize-handle {
+            position: absolute;
+            top: 0;
+            right: -3px;
+            width: 3px; /* Thinner resize handle */
+            height: 100%;
+            background-color: #e0e0e0;
+            cursor: ew-resize;
+            z-index: 10;
+        }
+
+        .resize-handle:hover {
+            background-color: #007bff;
+        }
+
+        /* First Division: Sidebar */
+        .sidebar {
+            width: 250px;
+            max-width: 20vw; /* Limit to 20% of viewport width */
+            background-color: #ffffff;
+            border-right: 1px solid #e0e0e0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            transform: translateX(0);
+            transition: transform 0.3s ease, border-right 0.3s ease;
+            position: relative; /* Ensure logout positioning is relative to sidebar */
+            height: 100%; /* Ensure sidebar takes full height */
+        }
+
+        .sidebar.collapsed {
+            transform: translateX(-100%); /* Slide out to the left */
+            border-right: none;
+            width: 0;
+            padding: 0;
+            overflow: hidden;
+            display: none; /* Fully remove from layout */
+        }
+
+        /* Sidebar: Profile */
+        .profile {
+            display: flex;
+            align-items: flex-start; /* Align to the left */
+        }
+
+        .profile img {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #e0e0e0;
+        }
+
+        /* Sidebar: Lists */
+        .lists {
+            flex: 1; /* Take available space */
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-items: stretch;
+            max-height: calc(100% - 140px); /* Adjust height to fit profile, header, and logout */
+            overflow-y: auto; /* Add vertical scrollbar when needed */
+            padding-right: 5px; /* Prevent content from touching scrollbar */
+        }
+
+        .lists-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            width: 100%;
+        }
+
+        .lists-title {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .lists-header .add-list-btn {
+            padding: 5px 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .lists-header .add-list-btn:hover {
+            background-color: #0056b3;
+        }
+
+        .add-list-input {
+            display: none;
+            padding: 8px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            width: 100%;
+            max-width: none; /* Full width of sidebar */
+        }
+
+        #listItems {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        /* Sidebar: List Items */
+        .list-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 10px;
+            cursor: pointer;
+            border-radius: 4px;
+            width: 100%;
+            box-sizing: border-box;
+            position: relative; /* For positioning kebab menu */
+        }
+
+        .list-item:hover {
+            background-color: #f0f0f0;
+        }
+
+        .list-item:hover .list-menu-btn {
+            display: inline-block; /* Show on hover */
+        }
+
+        .list-menu-btn:hover {
+            color: #007bff; /* Blue on hover */
+        }
+
+        .list-item.selected {
+            background-color: #e0e0e0;
+        }
+
+        .list-item .color-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            flex-shrink: 0; /* Prevent dot from shrinking */
+        }
+
+        .list-item .list-title {
+            flex: 1;
+        }
+
+        .list-item .add-list-btn {
+            padding: 5px 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            visibility: hidden; /* Keep hidden for list items */
+        }
+
+        .list-item .add-list-btn:hover {
+            background-color: #0056b3;
+        }
+
+        /* Color Dot */
+        .color-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        /* Sidebar: Logout */
+        .logout {
+            position: absolute; /* Fix to bottom of sidebar */
+            bottom: 20px; /* Distance from bottom */
+            left: 20px; /* Align with padding */
+            display: flex;
+            align-items: flex-start;
+        }
+
+        .logout img {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: block;
+        }
+
+        .logout form {
+            all: unset;          /* removes all default styles */
+            display: inline;     /* keeps it inline like <span> */
+        }
+
+        .logout form button {
+            all: unset;          /* remove button styles (borders, bg, padding) */
+            cursor: pointer;     /* still clickable */
+        }
+
+        .logout img:hover {
+            background-color: #c82333;
+        }
+
+        /* Sidebar: Divider */
+        .divider {
+            height: 0.3px;
+            background-color: #e5e5e5;
+            margin: 5px 0;
+            width: 100%;
+            max-width: none;
+            align-self: stretch;
+        }
+
+        .divider-logout {
+            position: absolute; /* Use absolute positioning */
+            bottom: 80px; /* Place above logout (40px height + 20px bottom + 10px spacing) */
+            left: 20px; /* Align with sidebar padding */
+            height: 0.3px;
+            background-color: #e5e5e5;
+            width: calc(100% - 40px); /* Full width minus padding (20px left + 20px right) */
+            max-width: none;
+        }
+
+        /* Scrollbar style */
+        .lists::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .lists::-webkit-scrollbar-track {
+            background: #f0f0f0;
+            border-radius: 2px;
+        }
+
+        .lists::-webkit-scrollbar-thumb {
+            background: #007bff;
+            border-radius: 4px;
+        }
+
+        .lists::-webkit-scrollbar-thumb:hover {
+            background: #0056b3;
+        }
+
+        /* Toggle Menu */
+        .list-menu {
+            display: none; /* Hidden by default */
+            position: absolute;
+            right: 10px; /* Align with list-item padding */
+            top: 100%; /* Below the list item */
+            background-color: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            z-index: 100; /* Above other elements */
+            min-width: 100px;
+        }
+
+        .list-menu.show {
+            display: block; /* Show when toggled */
+        }
+
+        .list-menu-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .list-menu-item:hover {
+            background-color: #f0f0f0;
+        }
+
+        .list-menu-item.delete {
+            color: #dc3545; /* Red for delete */
+        }
+
+        .list-menu-item.delete:hover {
+            background-color: #ffe6e6; /* Light red hover */
+        }
+
+        /* Kebab Menu Button (Three Vertical Dots) */
+        .list-menu-btn {
+            display: none; /* Hidden by default */
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            line-height: 1;
+            padding: 0 5px;
+            color: #6c757d; /* Gray color */
+        }
+
+        /* Second Division: Tasks */
+        .tasks-section {
+            width: 350px;
+            max-width: 70vw; /* Limit to 70% of viewport width */
+            background-color: #fafafa;
+            border-right: 1px solid #e0e0e0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* Tasks: Header */
+        .tasks-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .collapse-btn {
+            padding: 6px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            line-height: 1;
+        }
+
+        .collapse-btn:hover {
+            background-color: #0056b3;
+        }
+
+        /* List Title */
+        .list-title {
+            flex-grow: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Tasks: Add Task */
+        .add-task {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .add-task-bar {
+            display: flex;
+            align-items: center;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            background-color: #ffffff;
+            padding: 8px;
+        }
+
+        .add-task-bar input[type="text"] {
+            flex: 1;
+            border: none;
+            outline: none;
+            background: transparent;
+            padding: 0 8px;
+        }
+
+        .add-task-bar input[type="date"] {
+            border: none;
+            outline: none;
+            width: 20px; /* Minimal width for icon only */
+            padding: 0;
+            background: transparent;
+            color: transparent; /* Hide text */
+            cursor: pointer;
+        }
+
+
+        .add-task-bar input[type="date"]::-webkit-datetime-edit {
+            display: none; /* Hide text fields */
+        }
+
+        .priority-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+
+        .priority-btn {
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 0 8px;
+            display: flex;
+            align-items: center;
+        }
+
+        .priority-btn .priority-circle {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .priority-menu {
+            display: none;
+            position: absolute;
+            background-color: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            z-index: 100;
+            top: 100%;
+            right: 0;
+            min-width: 120px;
+        }
+
+        .priority-menu.show {
+            display: block;
+        }
+
+        .priority-option {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            cursor: pointer;
+        }
+
+        .priority-option:hover {
+            background-color: #f0f0f0;
+        }
+
+        .priority-circle {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .priority-circle.high { background-color: #dc3545; }
+        .priority-circle.medium { background-color: #ffc107; }
+        .priority-circle.low { background-color: #007bff; }
+        .priority-circle.none { background-color: #ffffff; border: 1px solid #e0e0e0; }
+
+        /* Tasks: Task List */
+        .task-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .task-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background-color: white;
+            border-radius: 4px;
+            border: 1px solid #e0e0e0;
+            justify-content: space-between;
+            transition: background-color 0.2s ease;
+            /* Ensure the task item doesn’t stretch unnecessarily */
+            align-self: stretch;
+            min-height: 40px; /* Set a minimum height to avoid collapse */
+            cursor: default; /* Prevent pointer cursor on empty areas */
+        }
+
+        .task-item.completed {
+            opacity: 0.6;
+            text-decoration: line-through;
+        }
+
+        .task-item:hover {
+            background-color: #f0f0f0; /* Light grey for hover */
+        }
+
+        .task-item.selected {
+            background-color: #e6f0fa; /* Light blue for selected task, matching list-item.selected */
+            border: 1px solid #007bff; /* Blue border to emphasize selection */
+        }
+
+        .task-title {
+            flex: 1; /* Allow title to take available space */
+            cursor: text; /* Indicate editability */
+            outline: none; /* Remove default outline */
+            padding: 2px 4px; /* Slight padding for editing */
+        }
+
+        .task-title:focus {
+            border-bottom: 1px solid #007bff; /* Blue underline when editing */
+            background-color: #f8f9fa; /* Light background to indicate editing */
+            border-radius: 2px; /* Subtle rounding */
+        }
+
+        .task-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px; /* Space between date and priority circle */
+        }
+
+        .task-date {
+            color: #6c757d; /* Grey color for date */
+            font-size: 14px; /* Slightly smaller for subtlety */
+        }
+
+        /* Task Meta: Editable Date and Priority */
+        .task-meta .task-date {
+            cursor: pointer; /* Indicate clickable */
+            padding: 2px 4px;
+            border-radius: 2px;
+        }
+
+        .task-meta .task-date:hover {
+            background-color: #f0f0f0; /* Hover effect to indicate editability */
+        }
+
+        .task-meta .task-date.editing {
+            display: none; /* Hide text when editing */
+        }
+
+        .task-meta .date-edit-container {
+            display: none; /* Hidden by default */
+        }
+
+        .task-meta .date-edit-container.editing {
+            display: flex; /* Show when editing */
+            align-items: center;
+        }
+
+        .task-meta .date-edit-container input[type="date"] {
+            border: none;
+            outline: none;
+            background: transparent;
+            padding: 0 8px;
+            width: 120px; /* Match add-task-bar style */
+            font-size: 14px;
+        }
+
+        .task-meta .priority-circle {
+            cursor: pointer; /* Indicate clickable */
+        }
+
+        .task-meta .priority-circle:hover {
+            opacity: 0.8; /* Subtle hover effect */
+        }
+
+        .task-meta .priority-edit-container {
+            display: none; /* Hidden by default */
+            position: relative;
+        }
+
+        .task-meta .priority-edit-container.editing {
+            display: inline-block; /* Show when editing */
+        }
+
+        .task-meta .priority-edit-container .priority-btn {
+            padding: 0 8px;
+        }
+
+        .task-meta .priority-edit-container .priority-menu {
+            top: 100%;
+            right: 0;
+            min-width: 120px;
+        }
+
+        /* Task Delete Button */
+        .task-item .delete-task-btn {
+            padding: 4px 8px;
+            background-color: #dc3545; /* Red to indicate deletion */
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            line-height: 1;
+            display: none; /* Hidden by default, shown on hover */
+        }
+
+        .task-item:hover .delete-task-btn {
+            display: inline-block; /* Show on hover */
+        }
+
+        .task-item .delete-task-btn:hover {
+            background-color: #c82333; /* Darker red on hover */
+        }
+
+        .priority-circle {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            cursor: pointer;
+        }
+
+        .priority-circle.high { background-color: #dc3545; }
+        .priority-circle.medium { background-color: #ffc107; }
+        .priority-circle.low { background-color: #007bff; }
+        .priority-circle.none { background-color: #ffffff; border: 1px solid #e0e0e0; }
+
+        .priority-edit-container {
+            display: none; /* Hidden by default */
+        }
+        .priority-edit-container.editing {
+            display: inline-block; /* Visible when editing */
+        }
+
+        .task-category.hidden {
+            display: none; /* Hide the entire category when no tasks */
+        }
+
+        /* Tasks: Task Category */
+        .task-category {
+            margin-top: 20px;
+        }
+
+        .task-category h3 {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+
+        /* Third Division: Task Details */
+        .task-details {
+            flex: 1;
+            padding: 20px;
+            background-color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            min-height: 100%; /* Ensure it takes full height even when empty */
+        }
+
+        /* Task Details: Header */
+        .task-details-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .task-details-header input[type="date"] {
+            padding: 8px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+        }
+
+        .task-details-title {
+            font-size: 20px;
+            font-weight: bold;
+            flex: 1;
+        }
+
+        .priority-flag {
+            cursor: pointer;
+            font-size: 18px;
+        }
+
+        .priority-flag.low { color: #007bff; } /* Match Blue for Low */
+        .priority-flag.medium { color: #ffc107; } /* Match Yellow for Medium */
+        .priority-flag.high { color: #dc3545; } /* Match Red for High */
+        .priority-flag.none { color: #6c757d; } /* Gray for None */
+
+        /* Task Details: Notes Section */
+        .notes-section {
+            flex: 1;
+        }
+
+        .add-note {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .add-note input {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+        }
+
+        .add-note button {
+            padding: 8px 12px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .add-note button:hover {
+            background-color: #0056b3;
+        }
+
+        .note-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .note-item.completed {
+            opacity: 0.6;
+            text-decoration: line-through;
+        }
+
+        .note-item input[type="text"] {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            background: transparent;
+        }
+
+        .note-item input[type="text"]:focus {
+            outline: none;
+            border-bottom: 1px solid #007bff;
+        }
+
+        /* Note Delete Button */
+        .note-item .delete-note-btn {
+            padding: 4px 8px;
+            background-color: #dc3545; /* Red to indicate deletion */
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            line-height: 1;
+            display: none; /* Hidden by default, shown on hover */
+        }
+
+        .note-item:hover .delete-note-btn {
+            display: inline-block; /* Show on hover */
+        }
+
+        .note-item .delete-note-btn:hover {
+            background-color: #c82333; /* Darker red on hover */
+        }
+
+        /* Pop-up Form Styles */
+        .add-list-popup {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw; /* Full viewport width */
+            height: 100vh; /* Full viewport height */
+            background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent background */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000; /* Ensure it appears above all other content */
+        }
+
+        .popup-content {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            width: 300px;
+            max-width: 90vw; /* Prevent overflow on small screens */
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .popup-content h3 {
+            margin-bottom: 15px;
+            font-size: 18px;
+            text-align: center;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        .form-group input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .form-group input[type="color"] {
+            width: 100%;
+            height: 40px;
+            padding: 4px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .form-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .form-actions button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .form-actions button[type="button"] {
+            background-color: #6c757d; /* Gray for Cancel */
+            color: white;
+        }
+
+        .form-actions button[type="button"]:hover {
+            background-color: #5a6268;
+        }
+
+        .form-actions button[type="submit"] {
+            background-color: #007bff; /* Blue for Add */
+            color: white;
+        }
+
+        .form-actions button[type="submit"]:hover {
+            background-color: #0056b3;
+        }
+    </style>
+    <meta name="_csrf" th:content="${_csrf.token}"/>
+    <meta name="_csrf_header" th:content="${_csrf.headerName}"/>
+    <script src="/js/home-script.js" defer></script>
+    <title>To-Do List App</title>
+
+</head>
+<body>
+<!-- Pop-up form for adding/editing a list -->
+<div class="add-list-popup" id="addListPopup" style="display: none;">
+    <div class="popup-content">
+        <h3 id="popupTitle">Add New List</h3>
+        <form id="addListForm">
+            <!-- CSRF Token -->
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+
+            <div class="form-group">
+                <label for="newListTitle">Title</label>
+                <input type="text" id="newListTitle" placeholder="Enter list title" required>
+            </div>
+            <div class="form-group">
+                <label for="newListColor">Color</label>
+                <input type="color" id="newListColor" value="#000000">
+            </div>
+            <div class="form-actions">
+                <button type="button" onclick="hideAddListPopup()">Cancel</button>
+                <button type="submit" id="submitListBtn">Add</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+
+<div class="container">
+    <!-- First Division: Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="profile">
+            <img src="/profile.jpg" alt="Profile">
+        </div>
+        <div class="divider" aria-hidden="true"></div>
+        <div class="lists" id="listContainer">
+            <div class="lists-header">
+                <span class="lists-title">Lists (<span id="listCount">0</span>)</span>
+                <button class="add-list-btn" onclick="showAddListPopup()">+</button>
+            </div>
+            <div id="listItems"></div>
+        </div>
+        <div class="divider-logout" aria-hidden="true"></div>
+        <div class="logout">
+            <form th:action="@{/to-do-list/logout}" method="post" style="display: block;">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                <button type="submit">
+                    <img src="/logout.png" alt="Logout">
+                </button>
+            </form>
+        </div>
+        <div class="resize-handle" onmousedown="startResize(event, 'sidebar')"></div>
+    </div>
+
+    <!-- Second Division: Tasks -->
+    <div class="tasks-section" id="tasksSection">
+        <div class="tasks-header">
+            <button class="collapse-btn" onclick="toggleSidebar()" aria-label="Toggle sidebar visibility">↔</button>
+            <div class="list-title" id="selectedListTitle"></div>
+        </div>
+        <div class="add-task">
+            <div class="add-task-bar">
+                <input type="text" id="newTaskInput" placeholder="Add new task">
+                <input type="date" id="newTaskDueDate">
+                <div class="priority-dropdown">
+                    <button class="priority-btn" onclick="togglePriorityMenu()">
+                        <span class="priority-circle none"></span>
+                    </button>
+                    <div class="priority-menu" id="priorityMenu">
+                        <div class="priority-option" data-priority="High">
+                            <span class="priority-circle high"></span>High
+                        </div>
+                        <div class="priority-option" data-priority="Medium">
+                            <span class="priority-circle medium"></span>Medium
+                        </div>
+                        <div class="priority-option" data-priority="Low">
+                            <span class="priority-circle low"></span>Low
+                        </div>
+                        <div class="priority-option" data-priority="None">
+                            <span class="priority-circle none"></span>None
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="task-category">
+            <h3>Ongoing Tasks</h3>
+            <div id="ongoingTasks" class="task-list"></div>
+        </div>
+        <div class="task-category">
+            <h3>Completed Tasks</h3>
+            <div id="completedTasks" class="task-list"></div>
+        </div>
+        <div class="resize-handle" onmousedown="startResize(event, 'tasksSection')"></div>
+    </div>
+
+    <!-- Third Division: Task Details -->
+    <div class="task-details">
+        <div class="task-details-header">
+            <input type="checkbox" id="taskCheckbox" onchange="toggleTaskCompletion()">
+            <input type="date" id="taskDueDate" onchange="updateTaskDueDate()">
+            <span class="task-details-title" id="selectedTaskTitle">Select a Task</span>
+            <div class="priority-container">
+                <span class="priority-circle none" id="priorityCircle"></span>
+                <div class="priority-edit-container">
+                    <div class="priority-menu" id="taskDetailsPriorityMenu">
+                        <div class="priority-option" data-priority="High" onclick="updateTaskDetailsPriority('High')">
+                            <span class="priority-circle high"></span>High
+                        </div>
+                        <div class="priority-option" data-priority="Medium"
+                             onclick="updateTaskDetailsPriority('Medium')">
+                            <span class="priority-circle medium"></span>Medium
+                        </div>
+                        <div class="priority-option" data-priority="Low" onclick="updateTaskDetailsPriority('Low')">
+                            <span class="priority-circle low"></span>Low
+                        </div>
+                        <div class="priority-option" data-priority="None" onclick="updateTaskDetailsPriority('None')">
+                            <span class="priority-circle none"></span>None
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="notes-section">
+            <div class="add-note">
+                <input type="text" id="newNoteInput" placeholder="Add notes">
+                <button onclick="addNote()">Add</button>
+            </div>
+            <div id="notesList"></div>
+        </div>
+    </div>
+</div>
+</body>
+</html>
